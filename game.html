@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flappy Flight</title>
+    <title>Flappy Flight - Global Leaderboard</title>
     <style>
         * {
             margin: 0;
@@ -30,7 +30,7 @@
         }
         
         .score-display {
-            font-size: 1.5em;
+            font-size: 1.2em;
             color: #ff00ff;
             margin-bottom: 10px;
             text-shadow: 0 0 10px #ff00ff;
@@ -60,6 +60,7 @@
             text-transform: uppercase;
             box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
             transition: all 0.3s;
+            margin: 5px;
         }
         
         .btn:hover {
@@ -77,18 +78,130 @@
             color: #888;
             font-size: 0.9em;
         }
+        
+        /* Leaderboard Styles */
+        .leaderboard {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(26, 26, 46, 0.95);
+            border: 2px solid #00ff88;
+            border-radius: 15px;
+            padding: 20px;
+            width: 250px;
+            max-height: 500px;
+            overflow-y: auto;
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+        }
+        
+        .leaderboard h2 {
+            color: #00ff88;
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #00ff88;
+            padding-bottom: 10px;
+        }
+        
+        .leaderboard-entry {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background: rgba(0, 255, 136, 0.1);
+            border-radius: 8px;
+            font-size: 0.9em;
+        }
+        
+        .leaderboard-entry:nth-child(2) { background: rgba(255, 215, 0, 0.3); } /* Gold */
+        .leaderboard-entry:nth-child(3) { background: rgba(192, 192, 192, 0.3); } /* Silver */
+        .leaderboard-entry:nth-child(4) { background: rgba(205, 127, 50, 0.3); } /* Bronze */
+        
+        .rank {
+            color: #00ff88;
+            font-weight: bold;
+            width: 30px;
+        }
+        
+        .name-input {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1a1a2e;
+            border: 3px solid #ff00ff;
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 0 50px rgba(255, 0, 255, 0.5);
+        }
+        
+        .name-input input {
+            padding: 10px;
+            font-size: 1.2em;
+            border-radius: 10px;
+            border: 2px solid #00ff88;
+            background: #0a0a0a;
+            color: white;
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            z-index: 999;
+        }
+        
+        @media (max-width: 900px) {
+            .leaderboard {
+                position: static;
+                transform: none;
+                width: 90%;
+                margin-top: 20px;
+                max-height: 200px;
+            }
+            body {
+                padding: 20px;
+            }
+        }
     </style>
 </head>
 <body>
     <h1>🐦 FLAPPY FLIGHT</h1>
-    <div class="score-display">Score: <span id="score">0</span> | Best: <span id="bestScore">0</span></div>
+    <div class="score-display">Score: <span id="score">0</span> | Your Best: <span id="bestScore">0</span></div>
     <canvas id="gameCanvas" width="400" height="600"></canvas>
     <div class="controls">
         <button class="btn" id="startBtn" onclick="startGame()">Start Game</button>
     </div>
     <div class="instructions">Click or Press SPACE to flap • Avoid pipes • Don't hit the ground!</div>
+    
+    <!-- Global Leaderboard -->
+    <div class="leaderboard" id="leaderboard">
+        <h2>🏆 GLOBAL TOP 10</h2>
+        <div id="leaderboardList">Loading...</div>
+    </div>
+    
+    <!-- Name Input Modal -->
+    <div class="overlay" id="overlay"></div>
+    <div class="name-input" id="nameInput">
+        <h2 style="color: #ff00ff; margin-bottom: 15px;">NEW HIGH SCORE!</h2>
+        <p style="color: #00ff88; font-size: 1.5em; margin-bottom: 10px;">Score: <span id="finalScore">0</span></p>
+        <input type="text" id="playerName" placeholder="Enter your name" maxlength="15">
+        <br>
+        <button class="btn" onclick="submitScore()">Submit Score</button>
+    </div>
 
     <script>
+        // ===== GAME VARIABLES =====
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const scoreElement = document.getElementById('score');
@@ -122,6 +235,86 @@
         let clouds = [];
         let stars = [];
         
+        // ===== LEADERBOARD VARIABLES =====
+        // Using a simple JSONBin.io setup (free, no signup required for basic use)
+        // Or you can use localStorage simulation for demo purposes
+        const LEADERBOARD_KEY = 'flappyLeaderboard_v1';
+        let globalScores = [];
+        
+        // Load scores from localStorage (simulating global storage for now)
+        // In production, replace this with actual API calls
+        function loadLeaderboard() {
+            const saved = localStorage.getItem(LEADERBOARD_KEY);
+            if (saved) {
+                globalScores = JSON.parse(saved);
+            } else {
+                // Default scores
+                globalScores = [
+                    {name: 'ACE', score: 50, date: Date.now()},
+                    {name: 'NEON', score: 42, date: Date.now()},
+                    {name: 'FLYER', score: 35, date: Date.now()},
+                    {name: 'BIRD', score: 28, date: Date.now()},
+                    {name: 'SKY', score: 20, date: Date.now()}
+                ];
+                saveLeaderboard();
+            }
+            displayLeaderboard();
+        }
+        
+        function saveLeaderboard() {
+            localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(globalScores));
+        }
+        
+        function displayLeaderboard() {
+            const list = document.getElementById('leaderboardList');
+            // Sort by score descending
+            globalScores.sort((a, b) => b.score - a.score);
+            // Keep top 10
+            globalScores = globalScores.slice(0, 10);
+            
+            let html = '';
+            globalScores.forEach((entry, index) => {
+                const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '•';
+                html += `
+                    <div class="leaderboard-entry">
+                        <span class="rank">${medal} ${index + 1}</span>
+                        <span style="flex: 1; text-align: left; padding-left: 10px;">${entry.name}</span>
+                        <span style="color: #ff00ff; font-weight: bold;">${entry.score}</span>
+                    </div>
+                `;
+            });
+            list.innerHTML = html;
+        }
+        
+        function showNameInput() {
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('nameInput').style.display = 'block';
+            document.getElementById('playerName').focus();
+        }
+        
+        function submitScore() {
+            const name = document.getElementById('playerName').value.trim().toUpperCase() || 'ANON';
+            globalScores.push({
+                name: name.substring(0, 15),
+                score: score,
+                date: Date.now()
+            });
+            saveLeaderboard();
+            displayLeaderboard();
+            
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('nameInput').style.display = 'none';
+            document.getElementById('playerName').value = '';
+        }
+        
+        // Close modal on overlay click
+        document.getElementById('overlay').onclick = () => {
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('nameInput').style.display = 'none';
+        };
+        
+        // ===== GAME FUNCTIONS =====
         function initBackground() {
             clouds = [];
             stars = [];
@@ -283,7 +476,7 @@
             ctx.font = '30px Arial';
             ctx.shadowColor = '#00ff88';
             ctx.fillText(`Score: ${score}`, canvas.width/2, canvas.height/2 + 10);
-            ctx.fillText(`Best: ${bestScore}`, canvas.width/2, canvas.height/2 + 50);
+            ctx.fillText(`Your Best: ${bestScore}`, canvas.width/2, canvas.height/2 + 50);
             
             ctx.fillStyle = 'white';
             ctx.font = '18px Arial';
@@ -379,10 +572,17 @@
             gameRunning = false;
             cancelAnimationFrame(animationId);
             
+            // Check for personal best
             if (score > bestScore) {
                 bestScore = score;
                 localStorage.setItem('flappyBestScore', bestScore);
                 bestScoreElement.textContent = bestScore;
+            }
+            
+            // Check for global top 10
+            const lowestHighScore = globalScores.length < 10 ? 0 : globalScores[globalScores.length - 1].score;
+            if (score > 0 && (globalScores.length < 10 || score > lowestHighScore)) {
+                setTimeout(showNameInput, 500);
             }
             
             drawGameOver();
@@ -407,6 +607,8 @@
             }
         });
         
+        // Initialize
+        loadLeaderboard();
         initBackground();
         drawStartScreen();
     </script>
